@@ -21,7 +21,6 @@ function renderLogin() {
           <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("login.password")}</span><input id="loginPassword" type="password" class="field-input" required /></label>
           <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center">${t("login.signIn")}</button>
         </form>
-        <p class="text-[11px] text-erp-muted mt-4">${t("login.demoHint")}</p>
         <div class="flex justify-center gap-2 mt-4">
           <button id="loginLangEn" class="btn" style="padding:.25rem .6rem;font-size:.7rem">EN</button>
           <button id="loginLangAr" class="btn" style="padding:.25rem .6rem;font-size:.7rem">AR</button>
@@ -172,7 +171,25 @@ function manualRefresh() {
 }
 function resetAutoRefresh() {
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
-  if (SETTINGS.refreshIntervalSeconds > 0) autoRefreshTimer = setInterval(manualRefresh, SETTINGS.refreshIntervalSeconds * 1000);
+  if (SETTINGS.refreshIntervalSeconds > 0) autoRefreshTimer = setInterval(performRefresh, SETTINGS.refreshIntervalSeconds * 1000);
+}
+
+function showToast(message, kind) {
+  const styles = {
+    info: "bg-blue-50 border-blue-200 text-blue-700",
+    success: "bg-green-50 border-green-200 text-green-700",
+    warning: "bg-amber-50 border-amber-200 text-amber-800",
+    error: "bg-red-50 border-red-200 text-red-700",
+  };
+  const el = document.createElement("div");
+  el.className = `toast-msg text-sm border rounded-lg px-3 py-2 shadow-cardHover ${styles[kind] || styles.info}`;
+  el.textContent = message;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 300);
+  }, 4500);
 }
 
 function wireShellEvents(route) {
@@ -183,7 +200,7 @@ function wireShellEvents(route) {
     saveSettingsToStorage(SETTINGS);
     resetAutoRefresh();
   });
-  document.getElementById("refreshBtn").addEventListener("click", manualRefresh);
+  document.getElementById("refreshBtn").addEventListener("click", performRefresh);
   document.getElementById("themeBtn").addEventListener("click", () => {
     setTheme(THEME === "light" ? "dark" : "light");
     renderShell(route);
@@ -261,6 +278,10 @@ function boot() {
   resetAutoRefresh();
   if (!location.hash || location.hash === "#") location.hash = "#/dashboard";
   else render();
+
+  if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+    syncLiveData(false);
+  }
 }
 
 window.addEventListener("hashchange", render);

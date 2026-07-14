@@ -84,6 +84,11 @@ function renderSettings() {
 
       <div class="card p-5 space-y-4">
         <h3 class="text-sm font-semibold">${t("settings.dataSource")}</h3>
+        <div class="rounded-lg bg-erp-bg border border-erp-border px-3 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
+          <span><span class="text-erp-muted">${t("settings.currentSource")}:</span> <strong>${s.dataSource === "live" ? t("settings.sourceLive") : t("settings.sourceSample")}</strong></span>
+          <span><strong>${formatNumber(DATA.items.length)}</strong> ${t("settings.itemsLoaded")}</span>
+          <span><span class="text-erp-muted">${t("settings.lastSynced")}:</span> <strong>${getLastSyncedAt() ? formatDate(getLastSyncedAt()) : t("settings.never")}</strong></span>
+        </div>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.dataSourceMode")}</span>
           <select id="setDataSource" class="field-input" ${!isAdmin ? "disabled" : ""}>
             <option value="sample" ${s.dataSource === "sample" ? "selected" : ""}>${t("settings.sampleData")}</option>
@@ -92,10 +97,13 @@ function renderSettings() {
         </label>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.sharepointUrl")}</span>
           <input id="setUrl" class="field-input" value="${escapeAttr(s.sharePointUrl)}" ${!isAdmin ? "disabled" : ""} />
+          <span class="block text-[11px] text-erp-muted mt-1">${t("settings.excelUrlHelp")}</span>
         </label>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.worksheetName")}</span>
           <input id="setSheet" class="field-input" value="${escapeAttr(s.worksheetName)}" ${!isAdmin ? "disabled" : ""} />
+          <span class="block text-[11px] text-erp-muted mt-1">${t("settings.worksheetNameHelp")}</span>
         </label>
+        <p class="text-[11px] text-erp-muted">${t("settings.expectedColumns")}</p>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.refreshInterval")}</span>
           <select id="setInterval" class="field-input" ${!isAdmin ? "disabled" : ""}>
             <option value="0" ${s.refreshIntervalSeconds === 0 ? "selected" : ""}>${t("topbar.manual")}</option>
@@ -167,7 +175,7 @@ function renderSettings() {
   `;
 
   if (isAdmin) {
-    document.getElementById("setSave").addEventListener("click", () => {
+    document.getElementById("setSave").addEventListener("click", async () => {
       SETTINGS = {
         ...SETTINGS,
         dataSource: document.getElementById("setDataSource").value,
@@ -197,11 +205,29 @@ function renderSettings() {
       renderShell(parseHash());
       renderSettings();
       const msgEl = document.getElementById("setMsg");
-      if (msgEl) msgEl.innerHTML = `<div class="text-sm bg-green-50 border border-green-200 text-green-700 rounded-lg px-3 py-2">${t("settings.savedMsg")}</div>`;
+      if (msgEl) msgEl.innerHTML = msgBox(t("settings.savedMsg"), "success");
+      if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+        await syncLiveData(true);
+        renderSettings();
+      }
     });
-    document.getElementById("setReload").addEventListener("click", manualRefresh);
-    document.getElementById("setTest").addEventListener("click", () => {
-      document.getElementById("setMsg").innerHTML = `<div class="text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">${t("settings.testMsg")}</div>`;
+    document.getElementById("setReload").addEventListener("click", performRefresh);
+    document.getElementById("setTest").addEventListener("click", async () => {
+      const msgEl = document.getElementById("setMsg");
+      const mode = document.getElementById("setDataSource").value;
+      if (mode !== "live") {
+        msgEl.innerHTML = msgBox(t("settings.testSampleMode"), "warning");
+        return;
+      }
+      const url = document.getElementById("setUrl").value;
+      const sheet = document.getElementById("setSheet").value;
+      msgEl.innerHTML = msgBox(t("settings.testing"), "info");
+      try {
+        const result = await loadDataFromExcelUrl(url, sheet);
+        msgEl.innerHTML = msgBox(t("settings.testSuccess").replace("{count}", result.rowCount).replace("{sheet}", result.sheetName), "success");
+      } catch (e) {
+        msgEl.innerHTML = msgBox(buildSyncErrorMessage(e), "error");
+      }
     });
     wireUsersSection();
   }

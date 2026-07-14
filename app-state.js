@@ -228,6 +228,15 @@ function alertCardHTML(a) {
     </div>
   </div>`;
 }
+function msgBox(text, kind) {
+  const styles = {
+    info: "bg-blue-50 border-blue-200 text-blue-700",
+    success: "bg-green-50 border-green-200 text-green-700",
+    warning: "bg-amber-50 border-amber-200 text-amber-800",
+    error: "bg-red-50 border-red-200 text-red-700",
+  };
+  return `<div class="text-sm border rounded-lg px-3 py-2 ${styles[kind] || styles.info}">${text}</div>`;
+}
 function detailRow(label, value) {
   return `<div class="flex items-center justify-between text-sm"><span class="text-erp-muted">${label}</span><span class="font-medium">${value}</span></div>`;
 }

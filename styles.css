@@ -28,6 +28,19 @@ body {
 }
 [dir="rtl"] body { font-family: "Segoe UI", Tahoma, Arial, sans-serif; }
 
+.toast-msg {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 100;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .2s ease, transform .2s ease;
+  max-width: 22rem;
+}
+.toast-msg.show { opacity: 1; transform: translateY(0); }
+[dir="rtl"] .toast-msg { right: auto; left: 1rem; }
+
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }

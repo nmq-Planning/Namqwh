@@ -427,8 +427,8 @@ function buildAnalyticsAggregates(items) {
   return { byCategory, bySupplier, coverageBuckets, leadTimeBuckets, criticalityBuckets, abcBuckets, xyzBuckets, fsnBuckets, topValueItems, topLowCoverage, topDemand };
 }
 
-function buildAppData(seed = 42) {
-  const items = enrichItems(generateRawItems(seed));
+function buildAppDataFromItems(rawItems) {
+  const items = enrichItems(rawItems);
   return {
     items,
     kpis: computeKPIs(items),
@@ -439,4 +439,7 @@ function buildAppData(seed = 42) {
     insights: generateAIInsights(items),
     analytics: buildAnalyticsAggregates(items),
   };
+}
+function buildAppData(seed = 42) {
+  return buildAppDataFromItems(generateRawItems(seed));
 }
