@@ -347,9 +347,7 @@ function boot() {
   if (!location.hash || location.hash === "#") location.hash = "#/dashboard";
   else render();
 
-  if (SETTINGS.dataSource === "upload") {
-    syncSharedItems(false);
-  } else if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+  if (SETTINGS.sharePointUrl) {
     syncLiveData(false);
   }
 }

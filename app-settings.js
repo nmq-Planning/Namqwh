@@ -167,9 +167,7 @@ function wireUsersSection() {
 }
 
 function currentSourceLabel(s) {
-  if (s.dataSource === "live") return t("settings.sourceLive");
-  if (s.dataSource === "upload") return t("settings.sourceUploadShared");
-  return t("settings.sourceSample");
+  return s.sharePointUrl && s.sharePointUrl.trim() ? t("settings.sourceLive") : t("settings.sourceSample");
 }
 
 async function renderSettings() {
@@ -193,48 +191,15 @@ async function renderSettings() {
           <span><strong>${formatNumber(DATA.items.length)}</strong> ${t("settings.itemsLoaded")}</span>
           <span><span class="text-erp-muted">${t("settings.lastSynced")}:</span> <strong>${getLastSyncedAt() ? formatDate(getLastSyncedAt()) : t("settings.never")}</strong></span>
         </div>
-        <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.dataSourceMode")}</span>
-          <select id="setDataSource" class="field-input" ${!isAdmin ? "disabled" : ""}>
-            <option value="upload" ${s.dataSource !== "live" ? "selected" : ""}>${t("settings.sampleData")}</option>
-            <option value="live" ${s.dataSource === "live" ? "selected" : ""}>${t("settings.liveSharepoint")}</option>
-          </select>
+        <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.sharepointUrl")}</span>
+          <input id="setUrl" class="field-input" value="${escapeAttr(s.sharePointUrl)}" ${!isAdmin ? "disabled" : ""} />
+          <span class="block text-[11px] text-erp-muted mt-1">${t("settings.excelUrlHelp")}</span>
         </label>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.worksheetName")}</span>
           <input id="setSheet" class="field-input" value="${escapeAttr(s.worksheetName)}" ${!isAdmin ? "disabled" : ""} />
           <span class="block text-[11px] text-erp-muted mt-1">${t("settings.worksheetNameHelp")}</span>
         </label>
         <p class="text-[11px] text-erp-muted">${t("settings.expectedColumns")}</p>
-
-        <div class="pt-3 border-t border-erp-border space-y-2">
-          <div class="flex items-center justify-between flex-wrap gap-2">
-            <h4 class="text-xs font-semibold uppercase tracking-wide text-erp-muted">${t("settings.uploadFileTitle")}</h4>
-            <span class="text-[11px] font-medium px-2 py-1 rounded-full ${hasGithubWriteAccess() ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}">
-              ${hasGithubWriteAccess() ? t("settings.uploadPushes") : t("settings.uploadLocalOnly")}
-            </span>
-          </div>
-          <p class="text-[11px] text-erp-muted">${t("settings.uploadFileHelp")}</p>
-          ${
-            isAdmin
-              ? `<label class="btn btn-primary" style="display:inline-flex;cursor:pointer">
-                  <i data-lucide="upload" style="width:14px;height:14px"></i> ${t("settings.chooseFile")}
-                  <input id="setUploadFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
-                </label>`
-              : ""
-          }
-          <div id="uploadMsg"></div>
-          <label class="block"><span class="block text-xs text-erp-muted mb-1">${t("settings.githubToken")}</span>
-            <input id="setGithubToken" type="password" class="field-input" placeholder="github_pat_..." value="${escapeAttr(s.githubToken || "")}" ${!isAdmin ? "disabled" : ""} />
-          </label>
-          <p class="text-[11px] text-erp-muted">${t("settings.githubTokenHelp")}</p>
-        </div>
-
-        <div class="pt-3 border-t border-erp-border space-y-2">
-          <h4 class="text-xs font-semibold uppercase tracking-wide text-erp-muted">${t("settings.liveSharepoint")}</h4>
-          <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.sharepointUrl")}</span>
-            <input id="setUrl" class="field-input" value="${escapeAttr(s.sharePointUrl)}" ${!isAdmin ? "disabled" : ""} />
-            <span class="block text-[11px] text-erp-muted mt-1">${t("settings.excelUrlHelp")}</span>
-          </label>
-        </div>
 
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.refreshInterval")}</span>
           <select id="setInterval" class="field-input" ${!isAdmin ? "disabled" : ""}>
@@ -310,10 +275,8 @@ async function renderSettings() {
     document.getElementById("setSave").addEventListener("click", async () => {
       SETTINGS = {
         ...SETTINGS,
-        dataSource: document.getElementById("setDataSource").value,
         sharePointUrl: document.getElementById("setUrl").value,
         worksheetName: document.getElementById("setSheet").value,
-        githubToken: document.getElementById("setGithubToken").value.trim(),
         usersBinId: document.getElementById("setUsersBinId").value.trim(),
         usersApiKey: document.getElementById("setUsersApiKey").value.trim(),
         refreshIntervalSeconds: Number(document.getElementById("setInterval").value),
@@ -341,10 +304,7 @@ async function renderSettings() {
       await renderSettings();
       const msgEl = document.getElementById("setMsg");
       if (msgEl) msgEl.innerHTML = msgBox(t("settings.savedMsg"), "success");
-      if (SETTINGS.dataSource === "upload") {
-        await syncSharedItems(true);
-        await renderSettings();
-      } else if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+      if (SETTINGS.sharePointUrl) {
         await syncLiveData(true);
         await renderSettings();
       }
@@ -352,11 +312,6 @@ async function renderSettings() {
     document.getElementById("setReload").addEventListener("click", performRefresh);
     document.getElementById("setTest").addEventListener("click", async () => {
       const msgEl = document.getElementById("setMsg");
-      const mode = document.getElementById("setDataSource").value;
-      if (mode !== "live") {
-        msgEl.innerHTML = msgBox(t("settings.testSampleMode"), "warning");
-        return;
-      }
       const url = document.getElementById("setUrl").value;
       const sheet = document.getElementById("setSheet").value;
       msgEl.innerHTML = msgBox(t("settings.testing"), "info");
@@ -367,23 +322,6 @@ async function renderSettings() {
         msgEl.innerHTML = msgBox(buildSyncErrorMessage(e), "error");
       }
     });
-    const uploadInput = document.getElementById("setUploadFile");
-    if (uploadInput) {
-      uploadInput.addEventListener("change", async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const msgEl = document.getElementById("uploadMsg");
-        msgEl.innerHTML = msgBox(t("settings.testing"), "info");
-        try {
-          const result = await handleFileUpload(file);
-          msgEl.innerHTML = msgBox(t("settings.uploadSuccess").replace("{count}", result.rowCount).replace("{name}", escapeHtml(file.name)), "success");
-          await renderSettings();
-        } catch (err) {
-          console.error("Upload failed:", err);
-          msgEl.innerHTML = msgBox(t("settings.uploadFailed").replace("{error}", (err && err.message) || String(err)), "error");
-        }
-      });
-    }
     wireUsersSection();
   }
 
