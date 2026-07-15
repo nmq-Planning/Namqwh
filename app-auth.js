@@ -44,6 +44,19 @@ async function saveRemoteUsers(users) {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
 }
 
+// Actually attempts the connection (unlike hasSharedStore, which only checks
+// that the fields are filled in) so Settings and the login screen can show
+// the real reason a shared login isn't working, instead of failing silently.
+async function checkSharedStoreStatus() {
+  if (!hasSharedStore()) return { configured: false, connected: false };
+  try {
+    await fetchRemoteUsers();
+    return { configured: true, connected: true };
+  } catch (e) {
+    return { configured: true, connected: false, error: e.message || String(e) };
+  }
+}
+
 async function apiLogin(email, password) {
   if (hasSharedStore()) {
     try {

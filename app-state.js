@@ -31,12 +31,13 @@ const CATEGORY_LINKS = [
 const defaultSettings = {
   dashboardTitle: "Inventory ERP",
   companyLogo: "",
-  sharePointUrl: "https://company.sharepoint.com/sites/Inventory/Shared Documents/Master.xlsx",
-  worksheetName: "Master File July-26",
+  sharePointUrl: "",
+  worksheetName: "",
   usersBinId: "",
   usersApiKey: "",
+  itemsBinId: "",
   refreshIntervalSeconds: 60,
-  dataSource: "sample",
+  dataSource: "upload",
   locale: "en",
   primaryColor: "#2E6BE6",
   headerColor: "#0B2545",
@@ -134,7 +135,10 @@ let THEME = localStorage.getItem("erp-theme") || "light";
 let PURCHASE_ORDERS = loadPOs();
 let ORDER_CART = loadCart();
 let SUPPLIER_TERMS = loadSupplierTerms();
-let DATA = buildAppData(42);
+// No demo/sample dataset — starts empty until you upload a real file or
+// configure a live URL (Settings -> Data Source). A cached copy of your
+// last uploaded file (if any) is used so this device works offline too.
+let DATA = buildAppDataFromItems(loadCachedItems() || []);
 let currentGridApi = null;
 let autoRefreshTimer = null;
 let PP_VIEW = "all";

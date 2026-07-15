@@ -138,19 +138,8 @@ function toDirectDownloadUrl(rawUrl) {
 
 /* ---------- Fetch + parse ---------- */
 
-function buildFetchTarget(rawUrl) {
-  const proxy = (SETTINGS.proxyUrl || "").trim();
-  if (proxy) {
-    // The Graph-based proxy resolves the file via Microsoft Graph's
-    // /shares endpoint, which needs the original, untransformed share
-    // URL — not the "?download=1" variant used for direct fetch mode.
-    return `${proxy.replace(/\/+$/, "")}?url=${encodeURIComponent(rawUrl.trim())}`;
-  }
-  return toDirectDownloadUrl(rawUrl);
-}
-
 async function fetchWorkbookFromUrl(rawUrl) {
-  const target = buildFetchTarget(rawUrl);
+  const target = toDirectDownloadUrl(rawUrl);
   const res = await fetch(target, { mode: "cors" });
   if (!res.ok) {
     let detail = "";
@@ -195,7 +184,100 @@ async function loadDataFromExcelUrl(rawUrl, worksheetName) {
     e.code = "NO_ROWS";
     throw e;
   }
-  return { data: buildAppDataFromItems(rawItems), sheetName: name, rowCount: rawItems.length };
+  return { data: buildAppDataFromItems(rawItems), rawItems, sheetName: name, rowCount: rawItems.length };
+}
+
+/* ---------- Upload a local file (no URL, no hosting needed) ---------- */
+
+async function loadDataFromFile(file, worksheetName) {
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const { name, sheet } = pickSheet(wb, worksheetName);
+  const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
+  const rawItems = mapExcelRowsToRawItems(rows);
+  if (!rawItems.length) {
+    const e = new Error("No valid item rows");
+    e.code = "NO_ROWS";
+    throw e;
+  }
+  return { data: buildAppDataFromItems(rawItems), rawItems, sheetName: name, rowCount: rawItems.length };
+}
+
+/* ---------- Local cache of the last uploaded/synced items ---------- */
+
+function loadCachedItems() {
+  try {
+    const raw = localStorage.getItem("erp-uploaded-items");
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+function saveCachedItems(rawItems) {
+  localStorage.setItem("erp-uploaded-items", JSON.stringify(rawItems));
+}
+
+/* ---------- Shared items store (jsonbin.io — same account as Users) ---------- */
+
+function hasItemsSharedStore() {
+  return !!(SETTINGS.itemsBinId && SETTINGS.itemsBinId.trim() && SETTINGS.usersApiKey && SETTINGS.usersApiKey.trim());
+}
+function itemsStoreUrl() {
+  return `https://api.jsonbin.io/v3/b/${SETTINGS.itemsBinId.trim()}`;
+}
+async function fetchRemoteItems() {
+  const res = await fetch(`${itemsStoreUrl()}/latest`, {
+    headers: { "X-Master-Key": SETTINGS.usersApiKey.trim(), "X-Bin-Meta": "false" },
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = await res.json();
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.record)) return data.record;
+  return [];
+}
+async function saveRemoteItems(rawItems) {
+  const res = await fetch(itemsStoreUrl(), {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "X-Master-Key": SETTINGS.usersApiKey.trim() },
+    body: JSON.stringify(rawItems),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// Called when the admin picks a file in Settings. Parses it locally, shows
+// it immediately on this device, and — if an Items Bin is configured —
+// pushes it to the shared store so every other device picks it up too.
+async function handleFileUpload(file) {
+  const result = await loadDataFromFile(file, SETTINGS.worksheetName);
+  DATA = result.data;
+  saveCachedItems(result.rawItems);
+  setLastSyncedAt(new Date().toISOString());
+  render();
+  if (hasItemsSharedStore()) {
+    await saveRemoteItems(result.rawItems); // let the caller surface failures
+  }
+  return result;
+}
+
+async function syncSharedItems(showMsg) {
+  if (!hasItemsSharedStore()) return;
+  if (showMsg) showToast(t("settings.syncing"), "info");
+  try {
+    const rawItems = await fetchRemoteItems();
+    if (rawItems.length) {
+      DATA = buildAppDataFromItems(rawItems);
+      saveCachedItems(rawItems);
+      setLastSyncedAt(new Date().toISOString());
+      render();
+      if (showMsg) showToast(t("settings.syncSuccess").replace("{count}", rawItems.length), "success");
+    } else if (showMsg) {
+      showToast(t("settings.testFailedNoRows"), "warning");
+    }
+  } catch (e) {
+    console.error("Shared items sync failed:", e);
+    if (showMsg) showToast(buildSyncErrorMessage(e), "error");
+  }
 }
 
 /* ---------- Sync orchestration ---------- */
@@ -219,6 +301,7 @@ async function syncLiveData(showMsg) {
   try {
     const result = await loadDataFromExcelUrl(SETTINGS.sharePointUrl, SETTINGS.worksheetName);
     DATA = result.data;
+    saveCachedItems(result.rawItems);
     setLastSyncedAt(new Date().toISOString());
     render();
     if (showMsg) showToast(t("settings.syncSuccess").replace("{count}", result.rowCount), "success");
@@ -229,9 +312,11 @@ async function syncLiveData(showMsg) {
 }
 
 function performRefresh() {
-  if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+  if (SETTINGS.dataSource === "upload" && hasItemsSharedStore()) {
+    syncSharedItems(true);
+  } else if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
     syncLiveData(true);
   } else {
-    manualRefresh();
+    render();
   }
 }

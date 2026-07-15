@@ -25,6 +25,13 @@ function renderLogin() {
           <button id="loginLangEn" class="btn" style="padding:.25rem .6rem;font-size:.7rem">EN</button>
           <button id="loginLangAr" class="btn" style="padding:.25rem .6rem;font-size:.7rem">AR</button>
         </div>
+        <div class="flex justify-center mt-3">
+          <label class="text-xs text-erp-accent hover:underline cursor-pointer">
+            ${t("login.importAccounts")}
+            <input id="loginImportFile" type="file" accept="application/json" class="hidden" />
+          </label>
+        </div>
+        <div id="loginImportMsg" class="mt-2"></div>
       </div>
     </div>
   `;
@@ -35,11 +42,19 @@ function renderLogin() {
     const submitBtn = document.querySelector("#loginForm button[type=submit]");
     submitBtn.disabled = true;
     const user = await apiLogin(email, password);
-    submitBtn.disabled = false;
     if (!user) {
-      document.getElementById("loginError").innerHTML = `<div class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-3">${t("login.invalid")}</div>`;
+      let extra = "";
+      if (hasSharedStore()) {
+        const status = await checkSharedStoreStatus();
+        if (!status.connected) {
+          extra = `<div class="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2 mb-3">${t("login.sharedStoreUnreachable").replace("{error}", escapeHtml(status.error || ""))}</div>`;
+        }
+      }
+      submitBtn.disabled = false;
+      document.getElementById("loginError").innerHTML = `<div class="text-sm bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2 mb-3">${t("login.invalid")}</div>${extra}`;
       return;
     }
+    submitBtn.disabled = false;
     CURRENT_USER = user;
     saveCurrentUser(user);
     boot();
@@ -55,6 +70,18 @@ function renderLogin() {
     saveSettingsToStorage(SETTINGS);
     applyLocaleDirection();
     renderLogin();
+  });
+  document.getElementById("loginImportFile").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const msgEl = document.getElementById("loginImportMsg");
+    try {
+      const count = await importUsersFile(file);
+      msgEl.innerHTML = msgBox(t("login.importSuccess").replace("{count}", count), "success");
+    } catch (err) {
+      console.error("Account import failed:", err);
+      msgEl.innerHTML = msgBox(t("login.importFailed"), "error");
+    }
   });
   if (window.lucide) lucide.createIcons();
 }
@@ -167,12 +194,6 @@ function renderMobileNavHTML(route) {
     .join("");
 }
 
-function manualRefresh() {
-  const icon = document.getElementById("refreshIcon");
-  if (icon) icon.style.animation = "spin 0.6s linear";
-  DATA = buildAppData(Math.floor(Math.random() * 1000000));
-  render();
-}
 function resetAutoRefresh() {
   if (autoRefreshTimer) clearInterval(autoRefreshTimer);
   if (SETTINGS.refreshIntervalSeconds > 0) autoRefreshTimer = setInterval(performRefresh, SETTINGS.refreshIntervalSeconds * 1000);
@@ -326,7 +347,9 @@ function boot() {
   if (!location.hash || location.hash === "#") location.hash = "#/dashboard";
   else render();
 
-  if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+  if (SETTINGS.dataSource === "upload" && hasItemsSharedStore()) {
+    syncSharedItems(false);
+  } else if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
     syncLiveData(false);
   }
 }

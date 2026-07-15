@@ -25,6 +25,17 @@ function renderDashboard() {
   app.innerHTML = `
     <div class="space-y-6">
       <div><h1 class="text-xl font-bold">${t("dash.title")}</h1><p class="text-sm text-erp-muted">${t("dash.subtitle")} — ${t("dash.clickHint")}</p></div>
+      ${
+        DATA.items.length === 0
+          ? `<div class="card p-5 border border-amber-200 bg-amber-50 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="text-sm font-semibold text-amber-800">${t("dash.noDataTitle")}</p>
+                <p class="text-xs text-amber-700 mt-1">${t("dash.noDataBody")}</p>
+              </div>
+              ${ROLE_PERMISSIONS[CURRENT_USER.role].canEditSettings ? `<a href="#/settings" class="btn btn-primary">${t("dash.noDataCta")}</a>` : ""}
+            </div>`
+          : ""
+      }
       ${sec.kpis ? `<div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">${kpiHtml}</div>` : ""}
       ${
         sec.health || sec.categoryChart

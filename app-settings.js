@@ -19,16 +19,21 @@ function renderUsersRows() {
   ).join("");
 }
 
-function renderUsersSection() {
-  const connected = hasSharedStore();
+function renderUsersSection(storeStatus) {
+  const status = storeStatus || { configured: false, connected: false };
+  const badgeClass = status.connected
+    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+    : status.configured
+    ? "bg-red-50 text-red-700 border border-red-200"
+    : "bg-amber-50 text-amber-700 border border-amber-200";
+  const badgeLabel = status.connected ? t("settings.accountsShared") : status.configured ? t("settings.accountsConfiguredError") : t("settings.accountsLocalOnly");
   return `
     <div class="card p-5 space-y-4">
       <div class="flex items-center justify-between flex-wrap gap-2">
         <h3 class="text-sm font-semibold">${t("settings.users")}</h3>
-        <span class="text-[11px] font-medium px-2 py-1 rounded-full ${connected ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-amber-50 text-amber-700 border border-amber-200"}">
-          ${connected ? t("settings.accountsShared") : t("settings.accountsLocalOnly")}
-        </span>
+        <span class="text-[11px] font-medium px-2 py-1 rounded-full ${badgeClass}">${badgeLabel}</span>
       </div>
+      ${status.configured && !status.connected ? msgBox(t("settings.sharedAccountsErrorDetail").replace("{error}", escapeHtml(status.error || "")), "error") : ""}
       <div class="overflow-x-auto">
         <table class="erp-table">
           <thead><tr><th>${t("settings.name")}</th><th>${t("settings.email")}</th><th>${t("settings.role")}</th><th>${t("settings.actions")}</th></tr></thead>
@@ -160,6 +165,13 @@ function wireUsersSection() {
   });
 }
 
+function currentSourceLabel(s) {
+  if (s.dataSource === "live") return t("settings.sourceLive");
+  if (hasItemsSharedStore()) return t("settings.sourceUploadShared");
+  if (loadCachedItems()) return t("settings.sourceUpload");
+  return t("settings.sourceSample");
+}
+
 async function renderSettings() {
   const app = document.getElementById("app");
   const isAdmin = ROLE_PERMISSIONS[CURRENT_USER.role].canEditSettings;
@@ -167,6 +179,7 @@ async function renderSettings() {
   const sec = s.dashboardSections;
 
   if (isAdmin) await apiListUsers();
+  const usersStoreStatus = isAdmin ? await checkSharedStoreStatus() : { configured: false, connected: false };
 
   app.innerHTML = `
     <div class="space-y-6" style="max-width:52rem">
@@ -176,25 +189,48 @@ async function renderSettings() {
       <div class="card p-5 space-y-4">
         <h3 class="text-sm font-semibold">${t("settings.dataSource")}</h3>
         <div class="rounded-lg bg-erp-bg border border-erp-border px-3 py-2 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs">
-          <span><span class="text-erp-muted">${t("settings.currentSource")}:</span> <strong>${s.dataSource === "live" ? t("settings.sourceLive") : t("settings.sourceSample")}</strong></span>
+          <span><span class="text-erp-muted">${t("settings.currentSource")}:</span> <strong>${currentSourceLabel(s)}</strong></span>
           <span><strong>${formatNumber(DATA.items.length)}</strong> ${t("settings.itemsLoaded")}</span>
           <span><span class="text-erp-muted">${t("settings.lastSynced")}:</span> <strong>${getLastSyncedAt() ? formatDate(getLastSyncedAt()) : t("settings.never")}</strong></span>
         </div>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.dataSourceMode")}</span>
           <select id="setDataSource" class="field-input" ${!isAdmin ? "disabled" : ""}>
-            <option value="sample" ${s.dataSource === "sample" ? "selected" : ""}>${t("settings.sampleData")}</option>
+            <option value="upload" ${s.dataSource !== "live" ? "selected" : ""}>${t("settings.sampleData")}</option>
             <option value="live" ${s.dataSource === "live" ? "selected" : ""}>${t("settings.liveSharepoint")}</option>
           </select>
-        </label>
-        <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.sharepointUrl")}</span>
-          <input id="setUrl" class="field-input" value="${escapeAttr(s.sharePointUrl)}" ${!isAdmin ? "disabled" : ""} />
-          <span class="block text-[11px] text-erp-muted mt-1">${t("settings.excelUrlHelp")}</span>
         </label>
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.worksheetName")}</span>
           <input id="setSheet" class="field-input" value="${escapeAttr(s.worksheetName)}" ${!isAdmin ? "disabled" : ""} />
           <span class="block text-[11px] text-erp-muted mt-1">${t("settings.worksheetNameHelp")}</span>
         </label>
         <p class="text-[11px] text-erp-muted">${t("settings.expectedColumns")}</p>
+
+        <div class="pt-3 border-t border-erp-border space-y-2">
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-erp-muted">${t("settings.uploadFileTitle")}</h4>
+          <p class="text-[11px] text-erp-muted">${t("settings.uploadFileHelp")}</p>
+          ${
+            isAdmin
+              ? `<label class="btn btn-primary" style="display:inline-flex;cursor:pointer">
+                  <i data-lucide="upload" style="width:14px;height:14px"></i> ${t("settings.chooseFile")}
+                  <input id="setUploadFile" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+                </label>`
+              : ""
+          }
+          <div id="uploadMsg"></div>
+          <label class="block"><span class="block text-xs text-erp-muted mb-1">${t("settings.itemsBinId")}</span>
+            <input id="setItemsBinId" class="field-input" placeholder="e.g. 6642a1b2c3d4e5f6a7b8c9d1" value="${escapeAttr(s.itemsBinId || "")}" ${!isAdmin ? "disabled" : ""} />
+          </label>
+          <p class="text-[11px] text-erp-muted">${t("settings.itemsBinIdHelp")}</p>
+        </div>
+
+        <div class="pt-3 border-t border-erp-border space-y-2">
+          <h4 class="text-xs font-semibold uppercase tracking-wide text-erp-muted">${t("settings.liveSharepoint")}</h4>
+          <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.sharepointUrl")}</span>
+            <input id="setUrl" class="field-input" value="${escapeAttr(s.sharePointUrl)}" ${!isAdmin ? "disabled" : ""} />
+            <span class="block text-[11px] text-erp-muted mt-1">${t("settings.excelUrlHelp")}</span>
+          </label>
+        </div>
+
         <label class="block"><span class="block text-xs font-medium text-erp-muted mb-1">${t("settings.refreshInterval")}</span>
           <select id="setInterval" class="field-input" ${!isAdmin ? "disabled" : ""}>
             <option value="0" ${s.refreshIntervalSeconds === 0 ? "selected" : ""}>${t("topbar.manual")}</option>
@@ -261,7 +297,7 @@ async function renderSettings() {
       <div id="setMsg"></div>
       <p class="text-xs text-erp-muted">${t("settings.staticNote")}</p>
 
-      ${isAdmin ? renderUsersSection() : ""}
+      ${isAdmin ? renderUsersSection(usersStoreStatus) : ""}
     </div>
   `;
 
@@ -272,6 +308,7 @@ async function renderSettings() {
         dataSource: document.getElementById("setDataSource").value,
         sharePointUrl: document.getElementById("setUrl").value,
         worksheetName: document.getElementById("setSheet").value,
+        itemsBinId: document.getElementById("setItemsBinId").value.trim(),
         usersBinId: document.getElementById("setUsersBinId").value.trim(),
         usersApiKey: document.getElementById("setUsersApiKey").value.trim(),
         refreshIntervalSeconds: Number(document.getElementById("setInterval").value),
@@ -299,7 +336,10 @@ async function renderSettings() {
       await renderSettings();
       const msgEl = document.getElementById("setMsg");
       if (msgEl) msgEl.innerHTML = msgBox(t("settings.savedMsg"), "success");
-      if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
+      if (SETTINGS.dataSource === "upload" && hasItemsSharedStore()) {
+        await syncSharedItems(true);
+        await renderSettings();
+      } else if (SETTINGS.dataSource === "live" && SETTINGS.sharePointUrl) {
         await syncLiveData(true);
         await renderSettings();
       }
@@ -322,6 +362,23 @@ async function renderSettings() {
         msgEl.innerHTML = msgBox(buildSyncErrorMessage(e), "error");
       }
     });
+    const uploadInput = document.getElementById("setUploadFile");
+    if (uploadInput) {
+      uploadInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const msgEl = document.getElementById("uploadMsg");
+        msgEl.innerHTML = msgBox(t("settings.testing"), "info");
+        try {
+          const result = await handleFileUpload(file);
+          msgEl.innerHTML = msgBox(t("settings.uploadSuccess").replace("{count}", result.rowCount).replace("{name}", escapeHtml(file.name)), "success");
+          await renderSettings();
+        } catch (err) {
+          console.error("Upload failed:", err);
+          msgEl.innerHTML = msgBox(t("settings.uploadFailed").replace("{error}", (err && err.message) || String(err)), "error");
+        }
+      });
+    }
     wireUsersSection();
   }
 
