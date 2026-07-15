@@ -113,7 +113,11 @@ function toDirectDownloadUrl(rawUrl) {
       if (!u.searchParams.has("download")) u.searchParams.set("download", "1");
       return u.toString();
     }
-    return rawUrl;
+    // Generic hosts (e.g. raw.githubusercontent.com): add a cache-busting
+    // param so updates to the file are picked up immediately instead of
+    // being served stale from a CDN/browser cache for several minutes.
+    u.searchParams.set("_cb", Date.now().toString());
+    return u.toString();
   } catch {
     return rawUrl;
   }
@@ -122,10 +126,14 @@ function toDirectDownloadUrl(rawUrl) {
 /* ---------- Fetch + parse ---------- */
 
 function buildFetchTarget(rawUrl) {
-  const direct = toDirectDownloadUrl(rawUrl);
   const proxy = (SETTINGS.proxyUrl || "").trim();
-  if (!proxy) return direct;
-  return `${proxy.replace(/\/+$/, "")}?url=${encodeURIComponent(direct)}`;
+  if (proxy) {
+    // The Graph-based proxy resolves the file via Microsoft Graph's
+    // /shares endpoint, which needs the original, untransformed share
+    // URL — not the "?download=1" variant used for direct fetch mode.
+    return `${proxy.replace(/\/+$/, "")}?url=${encodeURIComponent(rawUrl.trim())}`;
+  }
+  return toDirectDownloadUrl(rawUrl);
 }
 
 async function fetchWorkbookFromUrl(rawUrl) {
