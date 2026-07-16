@@ -142,6 +142,13 @@ let autoRefreshTimer = null;
 let PP_VIEW = "all";
 let PP_SEARCH = "";
 let PP_FILTERS = { source: "All", category: "All", supplier: "All", priority: "All" };
+let SUP_SEARCH = "";
+let SUP_FILTERS = { category: "All", score: "All" };
+let BRAND_SEARCH = "";
+let AN_FILTERS = { category: "All", supplier: "All" };
+let ALERTS_FILTERS = { category: "All", supplier: "All", severity: "All" };
+let INV_MORE_FILTERS_OPEN = false;
+let INV_RANGE_FILTERS = { minPrice: "", maxPrice: "", minCoverage: "", maxCoverage: "" };
 
 function applyTheme(theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");

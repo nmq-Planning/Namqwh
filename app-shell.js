@@ -310,6 +310,7 @@ function render() {
   else if (seg === "inventory" && param) renderProductDetail(decodeURIComponent(param));
   else if (seg === "inventory") renderInventory(route.query.get("q") || "", route.query.get("status") || "All", route.query.get("category") || "All", route.query.get("supplier") || "All");
   else if (seg === "categories" && param) renderCategory(param);
+  else if (seg === "suppliers" && param) renderSupplierDetail(decodeURIComponent(param));
   else if (seg === "suppliers") renderSuppliers();
   else if (seg === "brands" && param) renderBrandDetail(decodeURIComponent(param));
   else if (seg === "brands") renderBrands();
